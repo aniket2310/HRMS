@@ -3,12 +3,16 @@ package com.example.hrms.controller;
 import com.example.hrms.dto.EmployeeRequestDto;
 import com.example.hrms.dto.EmployeeResponseDto;
 import com.example.hrms.service.EmployeeService;
+import com.example.hrms.service.EmployeeService.FileData;
 import org.springframework.data.domain.Page;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import jakarta.validation.Valid;
+
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -21,29 +25,18 @@ public class EmployeeController {
         this.svc = svc;
     }
 
-    // Only ADMIN or HR can create employees
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<EmployeeResponseDto> create(@Valid @RequestBody EmployeeRequestDto req) {
-        EmployeeResponseDto created = svc.create(req);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        return ResponseEntity.status(HttpStatus.CREATED).body(svc.create(req));
     }
 
-    // Get single employee. Admin/HR can view any. EMPLOYEE can view own (ownership check below).
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR','EMPLOYEE')")
     public ResponseEntity<?> getById(@PathVariable Long id, Authentication auth) {
-        return svc.getById(id).map(dto -> {
-            // ownership check: if caller is EMPLOYEE, allow only if mapping matches
-            boolean isEmployee = auth.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_EMPLOYEE"));
-            if (isEmployee) {
-                // If you store userId in Employee and you can get username->User->id, verify ownership.
-                // Example pseudo: if (!dto.getUserId().equals(currentUserId)) return 403.
-                // We leave implementation hook here; by default we allow admin/hr to view.
-            }
-            return ResponseEntity.ok(dto);
-        }).orElseGet(() -> ResponseEntity.notFound().build());
+        return svc.getById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping
@@ -57,15 +50,90 @@ public class EmployeeController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<?> update(@PathVariable Long id, @Valid @RequestBody EmployeeRequestDto req) {
-        return svc.update(id, req).map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<EmployeeResponseDto> update(@PathVariable Long id,
+                                                      @Valid @RequestBody EmployeeRequestDto req) {
+        var opt = svc.update(id, req);            // Optional<EmployeeResponseDto>
+        if (opt.isPresent()) {
+            EmployeeResponseDto dto = opt.get();
+            // optional: log dto for debug
+            System.out.println("update success: " + dto); // replace with logger
+            return ResponseEntity.ok(dto);
+        } else {
+            System.out.println("update not found for id: " + id);
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         svc.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---------- FILE ENDPOINTS ----------
+
+    @PutMapping(value = "/{id}/profile-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<?> uploadProfilePhoto(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        try {
+            svc.uploadProfilePhoto(id, file);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/profile-photo")
+    public ResponseEntity<?> downloadProfilePhoto(@PathVariable Long id) {
+        try {
+            FileData file = svc.downloadProfilePhoto(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(file.contentType()))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.filename() + "\"")
+                    .body(file.data());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/profile-photo")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<?> deleteProfilePhoto(@PathVariable Long id) {
+        svc.deleteProfilePhoto(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping(value = "/{id}/aadhar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<?> uploadAadhar(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        try {
+            svc.uploadAadharPdf(id, file);
+            return ResponseEntity.noContent().build();
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/aadhar")
+    public ResponseEntity<?> downloadAadhar(@PathVariable Long id) {
+        try {
+            FileData file = svc.downloadAadharPdf(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.filename() + "\"")
+                    .body(file.data());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/aadhar")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<?> deleteAadhar(@PathVariable Long id) {
+        svc.deleteAadharPdf(id);
         return ResponseEntity.noContent().build();
     }
 }

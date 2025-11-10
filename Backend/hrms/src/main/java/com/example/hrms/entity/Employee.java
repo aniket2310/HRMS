@@ -17,7 +17,6 @@ public class Employee {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long empId;
 
-    // optional link to User (stores user id)
     @Column(name = "user_id")
     private Long userId;
 
@@ -40,7 +39,7 @@ public class Employee {
     private String email;
     private String address;
     private LocalDate dob;
-    private String status; // Active / Inactive
+    private String status;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -48,6 +47,31 @@ public class Employee {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ---------- FILE FIELDS ----------
+
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "profile_photo", columnDefinition = "LONGBLOB")
+    private byte[] profilePhoto;
+
+    @Column(name = "profile_photo_filename")
+    private String profilePhotoFilename;
+
+    @Column(name = "profile_photo_content_type")
+    private String profilePhotoContentType;
+
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "aadhar_pdf", columnDefinition = "LONGBLOB")
+    private byte[] aadharPdf;
+
+    @Column(name = "aadhar_pdf_filename")
+    private String aadharPdfFilename;
+
+    @Column(name = "aadhar_pdf_content_type")
+    private String aadharPdfContentType;
+
+    // ---------- TIMESTAMP HOOKS ----------
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

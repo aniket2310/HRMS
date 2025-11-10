@@ -23,4 +23,9 @@ public class EmployeeResponseDto {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private String profilePhotoFilename;
+    private String profilePhotoContentType;
+    private String aadharPdfFilename;
+    private String aadharPdfContentType;
 }
